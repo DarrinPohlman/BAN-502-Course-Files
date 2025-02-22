@@ -1,0 +1,179 @@
+---
+title: "Mod2 Simple Linear Regression Quiz"
+author: "Darrin"
+date: "2025-01-25"
+output: word_document
+---
+
+Libraries
+```{r,warning=FALSE,message=FALSE}
+library(tidyverse)
+library(tidymodels)
+library(GGally)
+library(lmtest) #for the Durbin-Watson test
+```
+
+Read-in the dataset
+```{R}
+air = airquality
+```
+
+Details concerning this dataset can be found here: http://rpubs.com/Nitika/linearRegression_Airquality.
+
+Examine the structure and summary of the dataset  
+```{r}
+str(air) #all variables numeric
+summary(air) #no missingness
+```
+Question 1 How many rows are in the “air” dataframe?  153
+Question 2 How many columns are in the “air” dataframe? 6
+Question 3 True/False: There is missing data in “Ozone” variable in the dataframe. True
+
+Let's look at ggpairs plot for visualization and correlation.  
+```{r}
+ggpairs(air)
+```
+Question 4 Which variable is most likely to be the response (Y) variable? D. Temp
+A. Ozone
+B. Solar.R
+C. Wind
+D. Temp
+E. Month
+F. Day
+
+
+We have three approaches that we can typically select from to deal with missing data:
+1. Delete the rows with missing data
+2. Delete the columns with missing data
+3. Impute (i.e., estimate or guess) values to replace the missing values
+
+Here we’ll choose to delete rows with any missing data. Use the code below to apply the “drop_na” function
+to the “air” dataframe. The resulting dataframe will be called “air2”. You will use this dataframe for the
+remainder of the assignment.
+air2 = air %>% drop_na()
+```{r}
+air2 = air %>% drop_na()
+```
+Examine the structure and summary of the dataset  
+```{r}
+str(air2) #all variables numeric
+summary(air2) #no missingness
+```
+
+Question 5 How many rows remain in this new (air2) data frame? 111
+Question 6 How many columns remain in this new (air2) data frame?  6
+
+Use the “ggpairs” function to develop a visualization of the relationships in this dataset and to show correlation
+values for the combinations of variables.
+Let's look at ggpairs plot for visualization and correlation.  
+```{r}
+ggpairs(air2)
+```
+Then use the “ggcorr” function to develop a correlation matrix for the variables. Hint: Use “label = TRUE”
+in the “ggcorr” function to show the correlation values.
+```{r}
+ggcorr(air2, label = TRUE)
+```
+
+Question 7 Which variable is most strongly correlated with the “Ozone” variable? C. Temp
+1
+A. Solar.R
+B. Wind
+C. Temp
+D. Month
+E. Day
+Question 8 Which variable is least strongly correlated with the “Ozone” variable? E. Day
+A. Solar.R
+B. Wind
+C. Temp
+D. Month
+E. Day
+
+```{r}
+ggplot(air2, aes(x=Temp,y=Ozone)) + geom_point(alpha=0.1) + geom_smooth(method = "lm", color = "red") + theme_bw()
+```
+
+Question 9 Plot “Temp” (x axis) versus “Ozone” (y axis) using the “ggplot” function. Choose an appropriate
+chart type. Which statement best describes the relationship between “Temp” and “Ozone”? C. As Temp increases, Ozone increases
+A. As Temp increases, Ozone decreases
+B. As Temp increases there is no noticeable change in Ozone
+C. As Temp increases, Ozone increases
+
+
+Use Tidymodels to create a linear regression model using “Temp” to predict “Ozone”. You miss wish to call
+your model fit “lm_fit”.
+```{r}
+air_simple = recipe(Ozone ~ Temp, air2)
+air_simple
+```
+Next we specify the type of model that we are building.  
+```{r}
+lm_model = #give the model type a name 
+  linear_reg() %>% #specify that we are doing linear regression
+  set_engine("lm") #specify the specify type of linear tool we want to use 
+```
+
+Next we combine the recipe and the model with a workflow.  
+```{r}
+lm_wflow = 
+  workflow() %>% 
+  add_model(lm_model) %>% 
+  add_recipe(air_simple)
+```
+
+Next we fit (execute) the workflow on our dataset.  
+```{r}
+lm_fit = fit(lm_wflow, air2)
+```
+
+```{r}
+summary(lm_fit$fit$fit$fit) #three fits :), the actual fit is embedded deeply in the object
+```
+Question 10 What is the slope of this regression model (to four decimal places)? 2.4391
+Question 11 what is the R-squared value of this model (not Adjusted R-squared) (to three decimal places)? .488
+Question 12 Is the “Temp” variables significant in the model? Yes
+
+
+Question 13 Use the code below to generate 95% confidence intervals for the coefficients. Note that you
+may need to change “lm_fit” to the name of your model fit if you used a different name.
+True/False: A 95% confidence interval for the slope coefficient does not contain zero. True
+confint(lm_fit$fit$fit$fit)
+```{r}
+confint(lm_fit$fit$fit$fit)
+```
+
+
+Question 14: Using your linear regression model with “Temp” to predict “Ozone”, what is the predicted
+“Ozone” value when “Temp” is equal to 80 (to two decimal places)? 47.48
+#Using predict function
+```{r}
+testdata = data.frame(Temp = c(80))
+predict(lm_fit, new_data = testdata)
+```
+
+Question 15 Perform appropriate model diagnostics to verify whether or not the model appears to meet the
+four linear regression model assumptions.
+Let's look at this regression line on our plot.
+```{r}
+ggplot(air2, aes(x=Temp,y=Ozone)) + geom_point(alpha=0.1) + geom_smooth(method = "lm", color = "red") + theme_bw()
+```
+**Assumption 1:** The predictor and response variable have a linear relationship  
+As noted above, it seems "reasonable" to say that there is something of a linear relationship between these two variables, but there is definitely a nonlinear effect present.  
+
+**Assumption 2:** Model errors (residuals) are independent  
+Let's use the Durbin-Watson Test to examine independence of residuals. The dwtest function is from the lmtest package.  
+```{r}
+dwtest(lm_fit$fit$fit$fit)
+```
+**Assumption 3:** Model residuals exhibit constant variance  
+Examine a plot of residuals.  
+```{r}
+air3 = air2 %>% mutate(resid1 = lm_fit$fit$fit$fit$residuals) #add the model residuals to our data frame
+ggplot(air3,aes(x=Temp,y=resid1)) + geom_point() + theme_bw()
+```
+**Assumption 4:** Model residuals are Normally-distributed  
+Examine a histogram of the residuals.  
+```{r}
+ggplot(air3,aes(x=resid1)) + geom_histogram() + theme_bw()
+```
+True/False: There is no evidence of non-independent (autocorrelated) residuals.  True

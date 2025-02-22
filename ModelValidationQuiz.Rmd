@@ -1,0 +1,244 @@
+---
+title: "Mod3 ModelValidationQuiz"
+author: "Darrin"
+date: "2025-02-01"
+output: word_document
+---
+
+Libraries: For this assignment you will need the following libraries: tidyverse, lubridate, and tidymodels.
+Before beginning the assignment tasks, read-in the “bike_cleaned.csv” file into a data frame called “bike”. This
+is the same data that you used in the Module 2 Multiple Linear Regression and Special Issues assignment. As
+we did in that assignment you should convert “dteday” from a character variable to a date variable. Convert
+the remaining character variables to factors. You can do this one variable at a time or use a “mutate_if”.
+Finally, convert the “hr” variable into a factor.
+Libraries  
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(lubridate) 
+```
+
+Read-in dataset  
+```{r}
+bike = read_csv("bike_cleaned-4.csv")
+```
+
+Convert “dteday” from a character variable to a date variable. The code below will perform this conversion:
+bike = bike %>% mutate(dteday = mdy(dteday))
+#Note that mdy is a lubridate package function
+#You can read more about lubridate here: https://lubridate.tidyverse.org/
+```{r}
+bike = bike %>% mutate(dteday = mdy(dteday))
+```
+
+Convert the remaining character variables to factors. You can do this one variable at a time or use a
+“mutate_if”. This function examines each variable. If the variable is a character it is converted into a factor.
+Otherwise, the variable is left alone.
+bike = bike %>% mutate_if(is.character, as_factor)
+```{r}
+bike = bike %>% mutate_if(is.character, as_factor)
+```
+
+Finally, convert the “hr” variable into a factor. We do because, even though “hr” is numeric, we want to try
+each hour as a category. This can be a useful trick when you have a numeric variable with only a few unique
+values (DO NOT do this for numeric variables that are continuous and contain many unique values) and
+when the relationship between the numeric variable and the response variable is clearly nonlinear (as we will
+see in a moment when we plot “hr” versus the response variable).
+bike = bike %>% mutate(hr = as_factor(hr))
+```{r}
+bike = bike %>% mutate(hr = as_factor(hr))
+```
+
+```{r}
+str(bike)
+summary(bike)
+```
+
+Question 1: Split the data into training and testing sets. Your training set should have 70% of the data.
+Use a random number (set.seed) of 1234. Your split should be stratified by the “count” variable.
+How many rows of data are in the training set? 12,163    I know it’s probably a bit annoying to keep answering this
+question about the number of rows, but it’s helpful to be able to validate that your split code is correct before
+proceeding :)
+Split  
+```{r}
+set.seed(1234)
+bike_split = initial_split(bike, prop = 0.70, strata = count)
+train = training(bike_split)
+test = testing(bike_split)
+```
+```{r}
+ggpairs(train, cardinality_threshold = 24)
+```
+Question 2 Stratifying the split by the “count” variable serves what purpose?  B
+A. Stratifying by “count” ensures that unusual values for “count” are eliminated
+B. Stratifying by “count” ensures that “count” is similarly represented in both the training and testing sets
+C. Stratifying by “count” ensures that the training set contains the “count” variable
+D. None of the above
+
+Question 3: Build a linear regression model (using the training set) to predict “count” using the variables
+“season”, “mnth”, “hr”, “holiday”, and “weekday”, “temp”, and “weathersit”.
+What is the adjusted R-squared value (to four digits) of the resulting model? 0.6209
+Model with best single variable (by correlation).  
+```{r}
+bike_recipe = recipe(count ~ season + mnth + hr + holiday + weekday + temp + weathersit, train)
+
+lm_model = #give the model type a name 
+  linear_reg() %>% #specify that we are doing linear regression
+  set_engine("lm") #specify the specify type of linear tool we want to use 
+
+lm_wflow = 
+  workflow() %>% 
+  add_model(lm_model) %>% 
+  add_recipe(bike_recipe)
+
+lm_fit = fit(lm_wflow, train)
+```
+
+```{r}
+summary(lm_fit$fit$fit$fit)
+```
+```{r}
+library(GGally) #for ggpairs function
+library(glmnet) #for Lasso, ridge, and elastic net models 
+library(ggcorrplot) #create an alternative to ggcorr plots
+library(ggplot2)
+```
+
+
+Question 4: Use the predict functions to make predictions (using your model from Question 3) on the
+training set. Hint: Be sure to store the predictions in an object, perhaps named “predict_train”
+or similar. Develop a histogram of the predictions (Hint: The predictions are likely stored in a variable
+called “.pred” in your predictions object).  C. Some predictions fro the number of rides in an hour are negative
+Select the statements below that are likely true about the distribution of predictions?
+A. The maximum number of rides predicted for an hour is around 600 
+B. The average number of rides predicted per hour is around 450
+C. Some predictions for the number of rides in an hour are negative
+D. None of these statements are true
+See the results on the test set  
+```{r}
+predict_train = lm_fit %>% predict(train) %>% bind_cols(train) %>% metrics(truth = count, estimate = .pred)
+```
+We can take a look at the performance metrics (R squared and RMSE) for the various penalties.  
+```{r}
+lasso_res %>%
+  collect_metrics()
+```
+
+We borrow some code from https://juliasilge.com/blog/lasso-the-office/ to see how our performance metrics change as we change the penalty value.  
+```{r}
+lasso_res %>%
+  collect_metrics() %>%
+  ggplot(aes(penalty, mean, color = .metric)) +
+  geom_errorbar(aes(
+    ymin = mean - std_err,
+    ymax = mean + std_err
+  ),
+  alpha = 0.5
+  ) +
+  geom_line(size = 1.5) +
+  facet_wrap(~.metric, scales = "free", nrow = 2) +
+  scale_x_log10() +
+  theme(legend.position = "none")
+```
+```{r}
+ggplot(predict_train, aes(x=count, y=hr))
+```
+
+Question 5: Determine the performance of your model on the testing set.
+What is the R-squared value (to four decimal places) of your model on the testing set?
+0.6193183	REMINDER: DO
+NOT build a model on the testing set. Use your model that was developed on the training set.
+Set-up the folds for k-fold. Here we'll use 10 folds (the standard). However, if you have an enormous dataset or are running a technique that is computationally-intensive, it can be advisable to reduce to 5 or 3 folds.  
+```{r}
+folds = vfold_cv(train, v = 5)
+```
+
+Set up a recipe as is usual with a few changes. In the model code, we add penalty = tune() to indicate that we will be trying to select the best lambda value. We also add code to define how many values of the lamdba parameter should be tried. Let's try 100. We also add a section of code to capture the model results across the various folds and penalty values. We also remove the code for the fit for now. This code will take a few moments to execute.  
+```{r}
+bike_recipe = recipe(count ~ season + mnth + hr + holiday + weekday + temp + weathersit, test) %>%
+  step_other(hr, threshold = .01) %>% #collapses small Neighborhoods into an "Other" group
+  step_dummy(all_nominal()) %>% #makes all categorical
+  step_center(all_predictors()) %>% #centers the predictors
+  step_scale(all_predictors()) #scales the predictors
+  
+lasso_model = #give the model type a name 
+  linear_reg(penalty = tune(), mixture = 1) %>% #mixture = 1 sets up Lasso, 0 sets up Ridge
+  set_engine("glmnet") #specify the specify type of linear tool we want to use 
+
+#try different lambda values ranging from 0 to 10000 in increments of 100                        
+#you may need to tweak this range 
+lambda_grid = expand.grid(penalty = seq(0,10000,100)) #consider a sequence of values from 0 to 10000 by 100
+
+lasso_wflow =
+  workflow() %>% 
+  add_model(lasso_model) %>% 
+  add_recipe(bike_recipe)
+
+lasso_res = lasso_wflow %>% 
+  tune_grid(
+    resamples = folds, #new line
+    grid = lambda_grid
+  )
+```
+
+We can take a look at the performance metrics (R squared and RMSE) for the various penalties.  
+```{r}
+lasso_res %>%
+  collect_metrics()
+```
+
+We borrow some code from https://juliasilge.com/blog/lasso-the-office/ to see how our performance metrics change as we change the penalty value.  
+```{r}
+lasso_res %>%
+  collect_metrics() %>%
+  ggplot(aes(penalty, mean, color = .metric)) +
+  geom_errorbar(aes(
+    ymin = mean - std_err,
+    ymax = mean + std_err
+  ),
+  alpha = 0.5
+  ) +
+  geom_line(size = 1.5) +
+  facet_wrap(~.metric, scales = "free", nrow = 2) +
+  scale_x_log10() +
+  theme(legend.position = "none")
+```
+Setting the penalty to a very small value is optimal.  
+
+What is the exact best value?  
+```{r}
+best_rsq = glmnet_tune %>%
+ select_best(metric="rsq")
+best_rsq
+```
+Finish the model with the best penalty to maximize R squared
+```{r}
+final_lasso = lasso_wflow %>% finalize_workflow(best_rsq)
+```
+
+Shows the model performance on the testing set  
+```{r}
+last_fit(
+  final_lasso,
+  bike_split) %>%
+  collect_metrics()
+```
+
+```{r}
+bike_recipe = recipe(count ~ season + mnth + hr + holiday + weekday + temp + weathersit, test)
+
+lm_model = #give the model type a name 
+  linear_reg() %>% #specify that we are doing linear regression
+  set_engine("lm") #specify the specify type of linear tool we want to use 
+
+lm_wflow = 
+  workflow() %>% 
+  add_model(lm_model) %>% 
+  add_recipe(bike_recipe)
+
+lm_fit = fit(lm_wflow, train)
+```
+
+```{r}
+summary(lm_fit$fit$fit$fit)
+```

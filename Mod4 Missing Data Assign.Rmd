@@ -1,0 +1,87 @@
+---
+title: "Mod4 Missing Data Assign"
+author: "Darrin"
+date: "2025-02-05"
+output: word_document
+---
+
+```{r}
+options(tidyverse.quiet = TRUE)
+library(tidyverse)
+library(mice) #package for imputation
+library(VIM) #visualizing missingness
+```
+
+Missing Data
+In this assignment you will complete a variety of tasks related to working with missing data.
+Libraries: For this assignment you will need the following libraries: tidyverse, VIM, and mice.
+
+Read in dataset   
+```{r}
+grades = read_csv("class-grades.csv")
+```
+
+Structure and summary
+```{r}
+str(grades)
+summary(grades)
+skim(grades)
+```
+Before beginning the assignment tasks, you should read-in the data for the assignment into a data frame
+called grades. This data contains grade information from an engineering course. The dataset was originally
+used to investigate how student performance in the course would be predictive of student grades on the
+“Final” exam. The “Prefix” column is a surrogate for enrollment year in the engineering program. Smaller
+values imply older (more mature?) students.
+
+Task 1: For which variables is there missing data?  Tutorial, Midterm, TakeHome, Final
+Looking at missingness by variable and combinations of missingness using "aggr" from VIM package.  
+```{r}
+vim_plot = aggr(grades, numbers = TRUE, prop = c(TRUE, FALSE),cex.axis=.7)
+#the cex.axis reduces size of text on x-axis so labels fit better
+```
+A view of missingness by variable and row.  
+```{r}
+vis_miss(grades) #from the naniar package
+```
+
+Task 2: Use the VIM package to visualize missingness. Are there any students that are missing multiple
+pieces of data? Yes, one.
+
+```{r}
+grades_rowdel = grades %>% drop_na() 
+#alternatively can specify which variable(s) on which to do the drop_na
+skim(grades_rowdel)
+```
+Task 3: Use row-wise deletion of missing values to create a new data frame. How many rows remain in
+this data frame? 89
+
+```{r}
+grades_coldel = grades %>% select(Prefix, Assignment) 
+vim_plot = aggr(grades_coldel, numbers = TRUE, prop = c(TRUE, FALSE),cex.axis=.7)
+skim(grades_coldel)
+```
+Task 4: Use column-wise deletion of missing values to create a new data frame (from the original data
+frame not from the data frame created in Task 3). How many columns remain in this data frame?  99
+
+
+Task 5: Which approach (Task 3 or Task 4) seems preferable for this dataset? Briefly discuss your answer.  Task 3 is preferable as this dataset includes more variables per observation to analyze and only sacrificed a few rows.
+
+
+```{r}
+set.seed(123) #sets seed for random number generator
+imp_grades = mice(grades, m=5, method='pmm', printFlag=FALSE)
+#m is the number of imputations, 5 is a reasonable value as a default
+#pmm is "predictive mean matching" = imputation method for numeric data
+#printFlag reduces amount of output
+summary(imp_grades)
+```
+Merge the imputed values into our titanic data frame  
+```{r}
+grades_complete = complete(imp_grades) 
+summary(grades_complete)
+```
+Task 6 Use the “mice” package to impute the missing data in this dataset. Set “m = 5” and “method
+=”pmm"" in the imputation. You MUST use a random number seed of 123 for this imputation. What is the
+mean value for the “Final” variable after imputation? 68.33
+
+

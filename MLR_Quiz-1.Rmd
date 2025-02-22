@@ -1,0 +1,235 @@
+---
+title: "MLR_Quiz-1"
+author: "Darrin"
+date: "2025-01-26"
+output: word_document
+---
+
+```{r}
+library(tidyverse) #tidyverse set of packages and functions
+library(tidymodels)
+library(glmnet) #for Lasso, ridge, and elastic net models 
+library(GGally) #create ggcorr and ggpairs plots
+library(ggcorrplot) #create an alternative to ggcorr plots
+library(MASS) #access to forward and backward selection algorithms
+library(car) #best subset selection
+library(lubridate) 
+library(lmtest) #for the dw test
+library(splines) #for nonlinear fitting
+```
+
+As we did before, read in the data and select a few variables of interest (to keep the analysis from being too large).     
+```{r}
+bike = read_csv("bike_cleaned-3.csv")
+```
+
+Examine the bike data frame.  
+```{r}
+str(bike)
+summary(bike)
+```
+
+
+Convert “dteday” from a character variable to a date variable. The code below will perform this conversion:
+bike = bike %>% mutate(dteday = mdy(dteday))
+#Note that mdy is a lubridate package function
+#You can read more about lubridate here: https://lubridate.tidyverse.org/
+```{r}
+bike = bike %>% mutate(dteday = mdy(dteday))
+```
+
+
+Convert the remaining character variables to factors. You can do this one variable at a time or use a
+“mutate_if”. This function examines each variable. If the variable is a character it is converted into a factor.
+Otherwise, the variable is left alone.
+bike = bike %>% mutate_if(is.character, as_factor)
+```{r}
+bike = bike %>% mutate_if(is.character, as_factor)
+```
+
+Finally, convert the “hr” variable into a factor. We do because, even though “hr” is numeric, we want to try
+each hour as a category. This can be a useful trick when you have a numeric variable with only a few unique
+values (DO NOT do this for numeric variables that are continuous and contain many unique values) and
+when the relationship between the numeric variable and the response variable is clearly nonlinear (as we will
+see in a moment when we plot “hr” versus the response variable).
+bike = bike %>% mutate(hr = as_factor(hr))
+```{r}
+bike = bike %>% mutate(hr = as_factor(hr))
+```
+
+
+```{r}
+str(bike)
+summary(bike)
+```
+
+Next we look at correlation. This is a logical step since almost all of our variables are quantitative.    
+```{r}
+#use "ggcorr" to create a correlation matrix with labels and correlation reported to two decimals
+ggcorr(bike, label = "TRUE", label_round = 2) 
+
+```
+
+Question 1 Which of the quantitative variables appears to be best correlated with “count”? NOTE: Ignore
+the “registered” and “casual” variable as the sum of these two variables equals “count”. Because these
+variables combine to make the response variable, they cannot be used as predictors. You can also ignore the
+“instant” variable as it is just a row number.  D. temp
+A. windspeed
+B. hum
+C. atemp
+D. temp
+——
+Correlation and Categorical Variables We cannot use correlation to assess the relationship between
+a categorical predictor variable and our response variable. A good option is to visualize the relationship
+between the categorical and response variables via a boxplot (other visualizations can work too, but a boxplot
+is often a good place to start). Note that the categorical variable should be on the x-axis.
+
+```{r}
+ggplot(bike,aes(x=hr,y=count)) + geom_boxplot() + geom_jitter(alpha = 0.15) + theme_bw()
+```
+If you create a boxplot for “hr” and “count” you will see that it is fairly obvious that “hr” affects “count”. It
+should also be obvious that the relationship between “hr” and “count” is not linear.
+
+Repeat this boxplot-based analysis for each of the categorical variables.
+
+
+```{r}
+ggplot(bike,aes(x=season,y=count)) + geom_boxplot() + geom_jitter(alpha = 0.15) + theme_bw()
+```
+Question 2 Which “season” appears to have the highest count of rides?  C. Summer
+
+A. Winter
+B. Spring
+C. Summer
+D. Fall
+
+
+### Models
+The first model we'll build uses the variable that is best correlated with "count", "hr". This is a univariate (simple) linear regression model. We also plot this model.  
+```{r}
+bike_recipe = recipe(count ~ hr, bike)
+
+lm_model = #give the model type a name 
+  linear_reg() %>% #specify that we are doing linear regression
+  set_engine("lm") #specify the specify type of linear tool we want to use 
+
+lm_wflow = 
+  workflow() %>% 
+  add_model(lm_model) %>% 
+  add_recipe(bike_recipe)
+
+lm_fit = fit(lm_wflow, bike)
+```
+
+```{r}
+summary(lm_fit$fit$fit$fit)
+```
+
+```{r}
+ggplot(bike, aes(x=hr, y=count)) + geom_point() + geom_smooth(method = lm, se = FALSE) + theme_bw()
+```
+Question 3 Build a linear regression model (using tidymodels) with “hr” to predict “count”. You will use
+this model to answer the next several questions.
+How many dummy (indicator) variables are used to represent “hr” in the model? 23
+
+Question 4 In your model from Question 3, which hour is selected as the “base” level (category)? The base
+level does not have an associated coefficient (slope) in the linear regression model. 0
+
+Question 5 During which hour of the day does the model predict the highest number of rides? 17
+
+```{r}
+ggplot(bike, aes(x=temp, y=count)) + geom_point() + geom_smooth(method = lm, se = FALSE) + theme_bw()
+```
+Question 6 Plot “temp” (x axis) versus “count” (y axis) using an appropriate plot type.
+Which statement best describes the general relationship between “temp” and “count”? A. As “temp” increases, “count” appears to generally increase.
+A. As “temp” increases, “count” appears to generally increase.
+B. As “temp” increases, “count” appears to generally decrease.
+C. There does not appear to be a relationship between “temp” and “count”
+
+```{r}
+bike_recipe = recipe(count ~ hr + temp, bike)
+
+lm_model = #give the model type a name 
+  linear_reg() %>% #specify that we are doing linear regression
+  set_engine("lm") #specify the specify type of linear tool we want to use 
+
+lm_wflow = 
+  workflow() %>% 
+  add_model(lm_model) %>% 
+  add_recipe(bike_recipe)
+
+lm_fit = fit(lm_wflow, bike)
+```
+
+```{r}
+summary(lm_fit$fit$fit$fit)
+```
+Question 7 Create a linear regression model (using tidymodels) with “hr” and “temp” to predict “count”.
+You will use this model to answer the next several questions. 
+What is the value of the slope coefficient for “hr23” in this model (to three decimal places)? 31.748
+
+Question 8 What is the adjusted R-squared value (to four decimal places) for the model from Question 7?  0.5886
+
+```{r}
+bike_recipe = recipe(count ~ temp + atemp, bike)
+
+lm_model = #give the model type a name 
+  linear_reg() %>% #specify that we are doing linear regression
+  set_engine("lm") #specify the specify type of linear tool we want to use 
+
+lm_wflow = 
+  workflow() %>% 
+  add_model(lm_model) %>% 
+  add_recipe(bike_recipe)
+
+lm_fit = fit(lm_wflow, bike)
+```
+
+```{r}
+summary(lm_fit$fit$fit$fit)
+```
+
+Question 9 Create a linear regression model (using tidymodels as usual) with “temp” and “atemp” to predict
+“count”. What is the adjusted R-squared value (to four decimal places) of this model? 0.1638
+
+Question 10 Which of the two variables in the model from Question 9 are significant? A. temp Only
+A. temp ONLY
+B. atemp ONLY
+C. Neither temp nor atemp are significant
+D. Both temp and atemp are significant
+
+Question 11 The model from Question 9 likely demonstrates which phenomenon?  C. Multicollinearity
+A. Non-constant variance of residuals
+B. Non-normality of residuals
+C. Multicollinearity
+D. None of these
+
+```{r}
+bike2 = bike %>% dplyr::select("season", "mnth", "hr", "holiday", "weekday", "workingday", "weathersit", "temp", "atemp", "hum", "windspeed")
+summary(bike2)
+```
+```{R}
+allmod = lm(count ~., bike) #use the ~. to include all predictors rather than typing them all in
+summary(allmod)
+```
+Question 12 Build a backward stepwise regression model to predict “count”. Your “allmod” (the starting
+model) should include the following variables: season, mnth, hr, holiday, weekday, workingday, weathersit,
+temp, atemp, hum, and windspeed.
+In the “allmod” you should see that the “workingday” variable appears with “NA” values in the model
+summary. This is happening because “workingday” is a perfect combination of two other predictor variables.
+Which two variables combine to make “workingday”? B. weekday and holiday
+A. season and mnth
+B. weekday and holiday
+C. hr and mnth
+D. season and mnth
+Backward stepwise  
+```{r}
+#backward
+backmod = stepAIC(allmod, direction = "backward", trace = TRUE) #trace = TRUE shows how the model is built (which variables are removed)
+summary(backmod)
+```
+Question 13 The backward stepwise method removes only one variable. Which variable is removed?  B. workingday
+A. windspeed
+B. workingday
+C. hum
+D. holiday

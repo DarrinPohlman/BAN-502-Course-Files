@@ -1,0 +1,216 @@
+## Neural Networks 
+
+```{r, include = FALSE}
+library(tidyverse)
+library(tidymodels)
+library(caret)
+library(mice)
+library(VIM)
+library(ranger)
+library(RColorBrewer)
+library(rpart)
+library(rattle)
+library(e1071)
+library(xgboost)
+library(usemodels)
+library(nnet) #our neural network package
+```
+
+```{r}
+churn = read_csv("churn-2.csv")
+```
+
+Data cleaning and preparation (as done before).  
+```{r}
+churn = churn %>% select(-customerID)
+churn = churn %>% mutate_if(is.character,as_factor)
+churn = churn %>% mutate(SeniorCitizen = as_factor(SeniorCitizen)) %>%
+  mutate(SeniorCitizen = fct_recode(SeniorCitizen, "No" = "0", "Yes" = "1"))
+churn = churn %>% drop_na()
+```
+
+Now we'll split the data.   
+```{r}
+set.seed(123) 
+churn_split = initial_split(churn, prop = 0.7, strata = Churn) #70% in training
+train = training(churn_split)
+test = testing(churn_split)
+```
+
+Unfortunately, the "usemodels" package doesn't support neural networks, so we're on our own a bit here to build the recipe, etc.  
+
+Next we build a neural network with R-controlled tuning.  
+```{r}
+set.seed(123)
+folds = vfold_cv(train, v = 5)
+```
+
+```{r}
+start_time = Sys.time() #for timing
+
+churn_recipe = recipe(Churn ~., train) %>%
+  step_normalize(all_predictors(), -all_nominal()) %>% #normalize the numeric predictors, not needed for categorical
+  step_dummy(all_nominal(), -all_outcomes())
+
+churn_model = 
+  mlp(hidden_units = tune(), penalty = tune(), 
+      epochs = tune()) %>%
+  set_mode("classification") %>% 
+  set_engine("nnet", verbose = 0) #verbose = 0 reduces output from the model
+  
+churn_workflow <- 
+  workflow() %>% 
+  add_recipe(churn_recipe) %>% 
+  add_model(churn_model) 
+
+set.seed(1234)
+neural_tune <-
+  tune_grid(churn_workflow, resamples = folds, grid = 25)
+
+end_time = Sys.time()
+end_time-start_time
+```
+
+```{r}
+neural_tune %>%
+  collect_metrics() %>%
+  filter(.metric == "accuracy") %>%
+  select(mean, hidden_units, penalty, epochs) %>%
+  pivot_longer(hidden_units:epochs,
+    values_to = "value",
+    names_to = "parameter"
+  ) %>%
+  ggplot(aes(value, mean, color = parameter)) +
+  geom_point(show.legend = FALSE) +
+  facet_wrap(~parameter, scales = "free_x") +
+  labs(x = NULL, y = "Accuracy")
+```
+
+
+
+```{r}
+best_nn = select_best(neural_tune, metric = "accuracy")
+
+final_nn = finalize_workflow(
+  churn_workflow,
+  best_nn
+)
+
+final_nn
+```
+
+```{r}
+#fit the finalized workflow to our training data
+final_nn_fit = fit(final_nn, train)
+```
+
+```{r}
+trainprednn = predict(final_nn_fit, train)
+head(trainprednn)
+```
+
+Confusion matrix
+```{r}
+confusionMatrix(trainprednn$.pred_class, train$Churn, 
+                positive = "Yes")
+```
+```{r}
+testprednn = predict(final_nn_fit, test)
+head(testprednn)
+```
+
+Confusion matrix
+```{r}
+confusionMatrix(testprednn$.pred_class, test$Churn, 
+                positive = "Yes")
+```
+
+Neural network with parameter tuning
+```{r}
+start_time = Sys.time() #for timing
+
+neural_grid = grid_regular(
+  hidden_units(range = c(1,2)),
+  penalty(range = c(-10,-1)), 
+  #penalty is a weird one, you are not setting the actual penalty itself, you are setting the range of x in 10^x
+  epochs(range = c(1,100)),
+  levels = 10
+)
+  
+churn_recipe = recipe(Churn ~., train) %>%
+  step_normalize(all_predictors(), -all_nominal()) #normalize the numeric predictors, not needed for categorical
+
+churn_model = 
+  mlp(hidden_units = tune(), penalty = tune(), 
+      epochs = tune()) %>%
+  set_mode("classification") %>% 
+  set_engine("nnet", verbose = 0) #verbose = 0 reduces output from the model
+  
+churn_workflow <- 
+  workflow() %>% 
+  add_recipe(churn_recipe) %>% 
+  add_model(churn_model) 
+
+set.seed(1234)
+neural_tune <-
+  tune_grid(churn_workflow, resamples = folds, grid = neural_grid)
+
+end_time = Sys.time()
+end_time-start_time
+```
+
+```{r}
+neural_tune %>%
+  collect_metrics() %>%
+  filter(.metric == "accuracy") %>%
+  select(mean, hidden_units, penalty, epochs) %>%
+  pivot_longer(hidden_units:epochs,
+    values_to = "value",
+    names_to = "parameter"
+  ) %>%
+  ggplot(aes(value, mean, color = parameter)) +
+  geom_point(show.legend = FALSE) +
+  facet_wrap(~parameter, scales = "free_x") +
+  labs(x = NULL, y = "Accuracy")
+```
+
+
+```{r}
+best_nn = select_best(neural_tune, metric="accuracy")
+
+final_nn = finalize_workflow(
+  churn_workflow,
+  best_nn
+)
+
+final_nn
+```
+
+```{r}
+#fit the finalized workflow to our training data
+final_nn_fit = fit(final_nn, train)
+```
+
+```{r}
+trainprednn = predict(final_nn_fit, train)
+head(trainprednn)
+```
+
+```{r}
+confusionMatrix(trainprednn$.pred_class, train$Churn, 
+                positive = "Yes")
+```
+
+```{r}
+testprednn = predict(final_nn_fit, test)
+head(testprednn)
+```
+
+Confusion matrix
+```{r}
+confusionMatrix(testprednn$.pred_class, test$Churn, 
+                positive = "Yes")
+```
+
+
+
