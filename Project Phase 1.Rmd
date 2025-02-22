@@ -1,0 +1,197 @@
+---
+title: "Project Phase 1"
+author: "Darrin Pohlman"
+date: "2025-02-15"
+output: word_document
+---
+
+## Objective:  Identify which variables may be strong predictors of the "failure" variable and any other interesting descriptive findings
+
+Libraries  
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(VIM) #visualizing missingness
+library(skimr)
+library(GGally)
+library(gridExtra)
+# library(mice) #package for imputation
+# library(glmnet) #for Lasso, ridge, and elastic net models 
+```
+
+Load data from the train.csv file.  
+```{r}
+train = read_csv("train.csv")
+```
+
+Structure and summary
+```{r}
+str(train)
+summary(train)
+```
+
+Factor conversion. Convert and recode the response variable failure.
+```{r}
+train = train %>% mutate(failure = as_factor(failure)) %>% 
+  mutate(failure = fct_recode(failure, "No" = "0", "Yes" = "1" )) 
+```
+
+Factor conversion attributes. Convert and recode the attribute variable.
+```{r}
+train = train %>% mutate(attribute_0 = as_factor(attribute_0)) %>% 
+              mutate(attribute_0 = fct_recode(attribute_0, "7" = "material_7", "5" = "material_5")) 
+train = train %>% mutate(attribute_1 = as_factor(attribute_1)) %>% 
+              mutate(attribute_1 = fct_recode(attribute_1, "8" = "material_8", "5" = "material_5", "6" = "material_6")) 
+```
+
+Convert all character variables to factors  
+```{r}
+train = train %>% mutate_if(is.character,as_factor)
+str(train)
+summary(train)
+```
+
+```{r}
+p1 = ggplot(train, aes(x = product_code, fill = failure)) + geom_bar(position = "fill") 
+l2 = ggplot(train, aes(x = failure, y = loading)) + geom_boxplot()
+grid.arrange(p1,l2, ncol = 2)
+```
+
+
+```{r}
+#m1 = ggplot(train, aes(x = failure, y = measurement_0)) + geom_boxplot()
+#m2 = ggplot(train, aes(x = failure, y = measurement_1)) + geom_boxplot()
+#m3 = ggplot(train, aes(x = failure, y = measurement_2)) + geom_boxplot()
+#m4 = ggplot(train, aes(x = failure, y = measurement_3)) + geom_boxplot()
+#m5 = ggplot(train, aes(x = failure, y = measurement_4)) + geom_boxplot()
+#m6 = ggplot(train, aes(x = failure, y = measurement_5)) + geom_boxplot()
+#m7 = ggplot(train, aes(x = failure, y = measurement_6)) + geom_boxplot()
+#m8 = ggplot(train, aes(x = failure, y = measurement_7)) + geom_boxplot()
+#m9 = ggplot(train, aes(x = failure, y = measurement_8)) + geom_boxplot()
+#m10 = ggplot(train, aes(x = failure, y = measurement_9)) + geom_boxplot()
+#m11 = ggplot(train, aes(x = failure, y = measurement_10)) + geom_boxplot()
+#m12 = ggplot(train, aes(x = failure, y = measurement_11)) + geom_boxplot()
+#m13 = ggplot(train, aes(x = failure, y = measurement_12)) + geom_boxplot()
+#m14 = ggplot(train, aes(x = failure, y = measurement_13)) + geom_boxplot()
+#m15 = ggplot(train, aes(x = failure, y = measurement_14)) + geom_boxplot()
+#m16 = ggplot(train, aes(x = failure, y = measurement_15)) + geom_boxplot()
+#m17 = ggplot(train, aes(x = failure, y = measurement_16)) + geom_boxplot()
+#m18 = ggplot(train, aes(x = failure, y = measurement_17)) + geom_boxplot()
+#grid.arrange(m1,m2,m3,m4,m5,m6,m7,m8,m9,m10,m11,m12,m13,m14,m15,m16,m17,m18, ncol = 3)
+```
+
+```{r}
+m1 = ggplot(train, aes(x = failure, y = measurement_0)) + geom_boxplot()
+m2 = ggplot(train, aes(x = failure, y = measurement_1)) + geom_boxplot()
+m3 = ggplot(train, aes(x = failure, y = measurement_2)) + geom_boxplot()
+m4 = ggplot(train, aes(x = failure, y = measurement_3)) + geom_boxplot()
+m5 = ggplot(train, aes(x = failure, y = measurement_4)) + geom_boxplot()
+m6 = ggplot(train, aes(x = failure, y = measurement_5)) + geom_boxplot()
+
+grid.arrange(m1,m2,m3,m4,m5,m6, ncol = 3)
+```
+```{r}
+m7 = ggplot(train, aes(x = failure, y = measurement_6)) + geom_boxplot()
+m8 = ggplot(train, aes(x = failure, y = measurement_7)) + geom_boxplot()
+m9 = ggplot(train, aes(x = failure, y = measurement_8)) + geom_boxplot()
+m10 = ggplot(train, aes(x = failure, y = measurement_9)) + geom_boxplot()
+m11 = ggplot(train, aes(x = failure, y = measurement_10)) + geom_boxplot()
+m12 = ggplot(train, aes(x = failure, y = measurement_11)) + geom_boxplot()
+grid.arrange(m7,m8,m9,m10,m11,m12, ncol = 3)
+```
+
+```{r}
+m13 = ggplot(train, aes(x = failure, y = measurement_12)) + geom_boxplot()
+m14 = ggplot(train, aes(x = failure, y = measurement_13)) + geom_boxplot()
+m15 = ggplot(train, aes(x = failure, y = measurement_14)) + geom_boxplot()
+m16 = ggplot(train, aes(x = failure, y = measurement_15)) + geom_boxplot()
+m17 = ggplot(train, aes(x = failure, y = measurement_16)) + geom_boxplot()
+m18 = ggplot(train, aes(x = failure, y = measurement_17)) + geom_boxplot()
+grid.arrange(m13,m14,m15,m16,m17,m18, ncol = 3)
+```
+
+Next we look at correlation. This is a logical step since almost all of our variables are quantitative.    
+```{r}
+#use "ggcorr" to create a correlation matrix with labels and correlation reported to two decimals
+ggcorr(train, method=c("pairwise"),label = TRUE,label_color = "blue", label_round = 2, label_size = 2, hjust = 1, layout.exp=2)
+```
+
+Looking at missingness by variable and combinations of missingness using "aggr" from VIM package.  
+```{r}
+vim_plot = aggr(train, numbers = TRUE, prop = c(TRUE, FALSE),cex.axis=.42)
+#the cex.axis reduces size of text on x-axis so labels fit better
+```
+Delete columns with high number (greater than 2000) of missing values column  
+```{r}
+#train = train %>% select(-measurement_10, -measurement_11, -measurement_12, -measurement_13, -measurement_14, -measurement_15, -measurement_16, -measurement_17)
+```
+
+Only missingness is in TotalCharges. Very small percentage. Row-wise deletion should be fine.  
+```{r}
+#train = train %>% drop_na()
+```
+
+
+Visualization of Attributes and Failure Train 
+```{r}
+p1 = ggplot(train, aes(x = attribute_0, fill = failure)) + geom_bar(position = "fill") 
+p2 = ggplot(train, aes(x = attribute_1, fill = failure)) + geom_bar(position = "fill")
+p3 = ggplot(train, aes(x = attribute_2, fill = failure)) + geom_bar(position = "fill")
+p4 = ggplot(train, aes(x = attribute_3, fill = failure)) + geom_bar(position = "fill")
+grid.arrange(p1,p2,p3,p4)
+```
+```{r}
+p1 = ggplot(train, aes(x = failure, y = attribute_0)) + geom_boxplot()
+p2 = ggplot(train, aes(x = failure, y = attribute_1)) + geom_boxplot()
+p3 = ggplot(train, aes(x = failure, y = attribute_2)) + geom_boxplot()
+p4 = ggplot(train, aes(x = failure, y = attribute_3)) + geom_boxplot()
+grid.arrange(p1,p2,p3,p4, ncol = 2)
+```
+
+Visualization of Measurement and Failure
+```{r}
+p1 = ggplot(train, aes(x = measurement_0, fill = failure)) + geom_bar(position = "fill")
+p2 = ggplot(train, aes(x = measurement_1, fill = failure)) + geom_bar(position = "fill")
+p3 = ggplot(train, aes(x = measurement_2, fill = failure)) + geom_bar(position = "fill")
+p4 = ggplot(train, aes(x = measurement_3, fill = failure)) + geom_bar(position = "fill")
+grid.arrange(p1,p2,p3,p4)
+```
+
+
+
+Analyzing TEST file
+Load data from the test.csv file.  
+```{r}
+test = read_csv("test.csv")
+```
+
+Structure and summary Test
+```{r}
+str(test)
+summary(test)
+```
+
+Factor conversion attributes. Convert and recode the attribute variable.
+```{r}
+test = test %>% mutate(attribute_0 = as_factor(attribute_0)) %>% 
+              mutate(attribute_0 = fct_recode(attribute_0, "7" = "material_7", "5" = "material_5")) 
+test = test %>% mutate(attribute_1 = as_factor(attribute_1)) %>% 
+              mutate(attribute_1 = fct_recode(attribute_1, "8" = "material_8", "5" = "material_5", "6" = "material_6")) 
+```
+
+Convert all character variables to factors  
+```{r}
+test = test %>% mutate_if(is.character,as_factor)
+str(test)
+summary(test)
+```
+
+```{r}
+#use "ggcorr" to create a correlation matrix with labels and correlation reported to two decimals
+ggcorr(test, method=c("pairwise"),label = TRUE,label_color = "blue", label_round = 2, label_size = 2, hjust = 1, layout.exp=2)
+```
+
+```{r}
+skim(test)
+```
+
